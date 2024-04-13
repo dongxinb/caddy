@@ -193,6 +193,7 @@ func (st ServerType) Setup(
 		GracePeriod:   tryDuration(options["grace_period"], &warnings),
 		ShutdownDelay: tryDuration(options["shutdown_delay"], &warnings),
 		Servers:       servers,
+		BrutalSpeed:   tryInt(options["brutal_speed"], &warnings),
 	}
 
 	// then make the TLS app

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -135,6 +136,8 @@ type App struct {
 	// When shutdown has been scheduled, placeholders {http.shutting_down} (bool)
 	// and {http.time_until_shutdown} (duration) may be useful for health checks.
 	ShutdownDelay caddy.Duration `json:"shutdown_delay,omitempty"`
+
+	BrutalSpeed int `json:"brutal_speed,omitempty"`
 
 	// Servers is the list of servers, keyed by arbitrary names chosen
 	// at your discretion for your own convenience; the keys do not
@@ -419,7 +422,17 @@ func (app *App) Start() error {
 			for portOffset := uint(0); portOffset < listenAddr.PortRangeSize(); portOffset++ {
 				// create the listener for this socket
 				hostport := listenAddr.JoinHostPort(portOffset)
-				lnAny, err := listenAddr.Listen(app.ctx, portOffset, net.ListenConfig{KeepAlive: time.Duration(srv.KeepAliveInterval)})
+				lnAny, err := listenAddr.Listen(app.ctx, portOffset, net.ListenConfig{
+					Control: func(network, address string, c syscall.RawConn) error {
+						return c.Control(func(fd uintptr) {
+							if app.BrutalSpeed > 0 {
+								// 设置 setsockopt
+								EnableBrutalSockopt(app.logger, fd)
+							}
+						})
+					},
+					KeepAlive: time.Duration(srv.KeepAliveInterval),
+				})
 				if err != nil {
 					return fmt.Errorf("listening on %s: %v", listenAddr.At(portOffset), err)
 				}
@@ -475,9 +488,11 @@ func (app *App) Start() error {
 				// handle http2 if use tls listener wrapper
 				if useTLS {
 					http2lnWrapper := &http2Listener{
-						Listener: ln,
-						server:   srv.server,
-						h2server: h2server,
+						Listener:    ln,
+						server:      srv.server,
+						h2server:    h2server,
+						BrutalSpeed: app.BrutalSpeed,
+						logger:      app.logger,
 					}
 					srv.h2listeners = append(srv.h2listeners, http2lnWrapper)
 					ln = http2lnWrapper

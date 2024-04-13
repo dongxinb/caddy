@@ -51,6 +51,7 @@ func init() {
 	RegisterGlobalOption("on_demand_tls", parseOptOnDemand)
 	RegisterGlobalOption("local_certs", parseOptTrue)
 	RegisterGlobalOption("key_type", parseOptSingleString)
+	RegisterGlobalOption("brutal_speed", parseOptInt)
 	RegisterGlobalOption("auto_https", parseOptAutoHTTPS)
 	RegisterGlobalOption("servers", parseServerOptions)
 	RegisterGlobalOption("ocsp_stapling", parseOCSPStaplingOptions)
@@ -279,6 +280,18 @@ func parseOptSingleString(d *caddyfile.Dispenser, _ any) (any, error) {
 	val := d.Val()
 	if d.Next() {
 		return "", d.ArgErr()
+	}
+	return val, nil
+}
+
+func parseOptInt(d *caddyfile.Dispenser, _ any) (any, error) {
+	d.Next() // consume option name
+	if !d.Next() {
+		return 0, d.ArgErr()
+	}
+	val, err := strconv.Atoi(d.Val())
+	if err != nil {
+		return 0, d.Errf("converting port '%s' to integer value: %v", d.Val(), err)
 	}
 	return val, nil
 }

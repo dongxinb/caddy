@@ -7,8 +7,11 @@ import (
 	"net"
 	"net/http"
 	"sync/atomic"
+	"syscall"
 	"time"
 
+	"github.com/sagernet/sing/common"
+	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
 
@@ -21,8 +24,10 @@ import (
 type http2Listener struct {
 	cnt uint64
 	net.Listener
-	server   *http.Server
-	h2server *http2.Server
+	server      *http.Server
+	h2server    *http2.Server
+	BrutalSpeed int
+	logger      *zap.Logger
 }
 
 type connectionStateConn interface {
@@ -35,6 +40,18 @@ func (h *http2Listener) Accept() (net.Conn, error) {
 		conn, err := h.Listener.Accept()
 		if err != nil {
 			return nil, err
+		}
+
+		if h.BrutalSpeed > 0 {
+			syscallConn, loaded := common.Cast[syscall.Conn](conn)
+			if loaded {
+				rawConn, err := syscallConn.SyscallConn()
+				if err == nil {
+					rawConn.Control(func(fd uintptr) {
+						SetBrutalSockopt(h.logger, fd, h.BrutalSpeed)
+					})
+				}
+			}
 		}
 
 		if csc, ok := conn.(connectionStateConn); ok {
